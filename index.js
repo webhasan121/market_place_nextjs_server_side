@@ -1,7 +1,7 @@
 const express = require("express");
 const { MongoClient, ServerApiVersion } = require("mongodb");
 const ObjectId = require("mongodb").ObjectId;
-
+const jwt = require("jsonwebtoken");
 const cors = require("cors");
 require("dotenv").config();
 
@@ -19,12 +19,49 @@ const client = new MongoClient(uri, {
   serverApi: ServerApiVersion.v1,
 });
 
+function verifyJWT(req, res, next) {
+  const authHeader = req.headers.authorization;
+  if (!authHeader) {
+    return res.status(401).send({ message: "unAuthorized access" });
+  }
+  const token = authHeader.split(" ")[1];
+  jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, function (err, decoded) {
+    if (err) {
+      return res.status(403).send({ message: "Forbidden  Access" });
+    }
+    req.decoded = decoded;
+    next();
+  });
+}
+
 async function run() {
   try {
     await client.connect();
     const db = client.db("market-place");
     const blogCollection = db.collection("blogs");
     const productCollection = db.collection("products");
+    const usersCollection = db.collection("users");
+
+    app.put("/users", async (req, res) => {
+      const email = req.body.email;
+      const user = req.body;
+      const filter = { email: email };
+      const options = { upsert: true };
+      const updateDoc = {
+        $set: user,
+      };
+      const result = await usersCollection.updateOne(
+        filter,
+        updateDoc,
+        options
+      );
+      const token = jwt.sign(
+        { email: email },
+        process.env.ACCESS_TOKEN_SECRET,
+        { expiresIn: "1h" }
+      );
+      res.send({ result: result, token: token });
+    });
 
     // get all blogs
     // app.get("/products", async (req, res) => {
